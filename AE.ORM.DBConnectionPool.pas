@@ -162,8 +162,6 @@ End;
 
 Function TAEORMDBConnectionPool.PingConnection(Const inConnection: TZConnection; Const inReconnectIfDead: Boolean): Boolean;
 Begin
-  Result := False;
-
   Try
     If Not _pingsupported Then
     Begin
