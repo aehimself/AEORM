@@ -169,7 +169,7 @@ Var
 Begin
   json := Self.AsJSON;
   Try
-    Result := json.Format;
+    Result := json.ToString;
   Finally
     FreeAndNil(json);
   End;
