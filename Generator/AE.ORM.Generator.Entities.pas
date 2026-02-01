@@ -98,11 +98,15 @@ Type
 
   TAEORMEntityGeneratorTable = Class(TAEORMEntityBase)
   strict private
+    _afterloadextracode: String;
+    _beforesaveextracode: String;
     _fields: TObjectDictionary<String, TAEORMEntityGeneratorField>;
     _incomingrelations: TObjectList<TAEORMEntityGeneratorRelation>;
     _outgoingrelations: TObjectList<TAEORMEntityGeneratorRelation>;
     _primarykeys: TList<String>;
     Procedure AddRelation(Const inRelationStore: TObjectList<TAEORMEntityGeneratorRelation>; Const inSourceTableName, inTargetTableName, inRelationName, inSourceFieldName, inTargetFieldName: String);
+    Procedure SetAfterLoadExtraCode(Const inAfterLoadExtraCode: String);
+    Procedure SetBeforeSaveExtraCode(Const inBeforeSaveExtraCode: String);
     Procedure SetField(Const inFieldName: String; Const inField: TAEORMEntityGeneratorField);
     Function GetField(Const inFieldName: String): TAEORMEntityGeneratorField;
     Function GetFields: TArray<String>;
@@ -123,6 +127,8 @@ Type
     Function IncomingRelationField(Const inFieldName: String): Boolean;
     Function OutgoingRelationField(Const inFieldName: String): Boolean;
     Function RelationsExist: Boolean;
+    Property AfterLoadExtraCode: String Read _afterloadextracode Write SetAfterLoadExtraCode;
+    Property BeforeSaveExtraCode: String Read _beforesaveextracode Write SetBeforeSaveExtraCode;
     Property Field[Const inFieldName: String]: TAEORMEntityGeneratorField Read GetField Write SetField;
     Property Fields: TArray<String> Read GetFields;
     Property GeneratedClassName;
@@ -140,6 +146,8 @@ Const
   BASE_GENERATEDPROPERTYNAME = 'generatedpropertyname';
   BASE_GENERATEDVARIABLENAME = 'generatedvariablename';
 
+  TABLE_AFTERLOADEXTRACODE = 'afterloadextracode';
+  TABLE_BEFORESAVEEXTRACODE = 'beforesaveextracode';
   TABLE_FIELDS = 'fields';
   TABLE_PKEYS = 'primarykeys';
   TABLE_INCOMINGRELATIONS = 'incomingrelations';
@@ -624,6 +632,12 @@ Var
 Begin
   Result := inherited;
 
+  If Not _afterloadextracode.IsEmpty Then
+    Result.AddPair(TABLE_AFTERLOADEXTRACODE, _afterloadextracode);
+
+  If Not _beforesaveextracode.IsEmpty Then
+    Result.AddPair(TABLE_BEFORESAVEEXTRACODE, _beforesaveextracode);
+
   json := TJSONObject.Create;
   Try
     For s In _fields.Keys Do
@@ -701,7 +715,11 @@ Begin
 
   _fields.Clear;
   _incomingrelations.Clear;
+  _outgoingrelations.Clear;
   _primarykeys.Clear;
+
+  _afterloadextracode := '';
+  _beforesaveextracode := '';
 End;
 
 Procedure TAEORMEntityGeneratorTable.InternalClearChanged;
@@ -771,12 +789,28 @@ Begin
      End;
 End;
 
+Procedure TAEORMEntityGeneratorTable.SetAfterLoadExtraCode(Const inAfterLoadExtraCode: String);
+Begin
+  If _afterloadextracode = inAfterLoadExtraCode Then
+    Exit;
+
+  _afterloadextracode := inAfterLoadExtraCode;
+
+  Self.SetChanged;
+End;
+
 Procedure TAEORMEntityGeneratorTable.SetAsJSON(Const inJSON: TJSONObject);
 Var
   jp: TJSONPair;
   jv: TJSONValue;
 Begin
   inherited;
+
+  If inJSON.GetValue(TABLE_AFTERLOADEXTRACODE) <> nil Then
+    _afterloadextracode := inJSON.GetValue(TABLE_AFTERLOADEXTRACODE).Value;
+
+  If inJSON.GetValue(TABLE_BEFORESAVEEXTRACODE) <> nil Then
+    _beforesaveextracode := inJSON.GetValue(TABLE_BEFORESAVEEXTRACODE).Value;
 
   If inJSON.GetValue(TABLE_FIELDS) <> nil Then
     For jp in TJSONObject(inJSON.GetValue(TABLE_FIELDS)) Do
@@ -793,6 +827,16 @@ Begin
   If inJSON.GetValue(TABLE_OUTGOINGRELATIONS) <> nil Then
     For jv In TJSONArray(inJSON.GetValue(TABLE_OUTGOINGRELATIONS)) Do
       _outgoingrelations.Add(TAEORMEntityGeneratorRelation.NewFromJSON(jv) As TAEORMEntityGeneratorRelation);
+End;
+
+Procedure TAEORMEntityGeneratorTable.SetBeforeSaveExtraCode(Const inBeforeSaveExtraCode: String);
+Begin
+  If _beforesaveextracode = inBeforeSaveExtraCode Then
+    Exit;
+
+  _beforesaveextracode := inBeforeSaveExtraCode;
+
+  Self.SetChanged;
 End;
 
 Procedure TAEORMEntityGeneratorTable.SetField(Const inFieldName: String; Const inField: TAEORMEntityGeneratorField);

@@ -16,6 +16,8 @@ Type
   TAEORMEntityGeneratorSettings = Class(TAEApplicationSetting)
   strict private
     _globalvarprefix: String;
+    _implementationunits: TList<String>;
+    _interfaceunits: TList<String>;
     _lowercasevars: Boolean;
     _tables: TObjectDictionary<String, TAEORMEntityGeneratorTable>;
     Procedure SetAsString(Const inJSONString: String);
@@ -23,6 +25,8 @@ Type
     Procedure SetLowerCaseVariables(Const inLowerCaseVariables: Boolean);
     Procedure SetTable(Const inTableName: String; Const inTable: TAEORMEntityGeneratorTable);
     Function GetAsString: String;
+    Function GetImplementationUnits: TArray<String>;
+    Function GetInterfaceUnits: TArray<String>;
     Function GetTable(Const inTableName: String): TAEORMEntityGeneratorTable;
     Function GetTables: TArray<String>;
   strict protected
@@ -34,9 +38,13 @@ Type
   public
     Constructor Create; Override;
     Destructor Destroy; Override;
+    Procedure AddImplementationUnit(Const inImplementationUnit: String);
+    Procedure RemoveImplementationUnit(Const inImplementationUnit: String);
     Function ContainsTable(Const inTableName: String): Boolean;
     Property AsString: String Read GetAsString Write SetAsString;
     Property GlobalVariablePrefix: String Read _globalvarprefix Write SetGlobalVariablePrefix;
+    Property ImplementationUnits: TArray<String> Read GetImplementationUnits;
+    Property InterfaceUnits: TArray<String> Read GetInterfaceUnits;
     Property LowerCaseVariables: Boolean Read _lowercasevars Write SetLowerCaseVariables;
     Property Table[Const inTableName: String]: TAEORMEntityGeneratorTable Read GetTable Write SetTable;
     Property Tables: TArray<String> Read GetTables;
@@ -49,11 +57,23 @@ Uses System.SysUtils;
 Const
   GENSET_TABLES = 'tables';
   GENSET_PREFIX = 'globalvariableprefix';
+  GENSET_IMPLEMENTATIONUNITS = 'implementationunits';
+  GENSET_INTERFACEUNITS = 'interfaceunits';
   GENSET_LOWERCASEVARS = 'lowercasevars';
 
 //
 // TAEORMEntityGeneratorSettings
 //
+
+Procedure TAEORMEntityGeneratorSettings.AddImplementationUnit(Const inImplementationUnit: String);
+Begin
+  If _implementationunits.Contains(inImplementationUnit) Then
+    Exit;
+
+  _implementationunits.Add(inImplementationUnit);
+
+  Self.SetChanged;
+End;
 
 Function TAEORMEntityGeneratorSettings.ContainsTable(Const inTableName: String): Boolean;
 Begin
@@ -64,11 +84,15 @@ Constructor TAEORMEntityGeneratorSettings.Create;
 Begin
   inherited;
 
+  _implementationunits := TList<String>.Create;
+  _interfaceunits := TList<String>.Create;
   _tables := TObjectDictionary<String, TAEORMEntityGeneratorTable>.Create([doOwnsValues]);
 End;
 
 Destructor TAEORMEntityGeneratorSettings.Destroy;
 Begin
+  FreeAndNil(_implementationunits);
+  FreeAndNil(_interfaceunits);
   FreeAndNil(_tables);
 
   inherited;
@@ -77,21 +101,50 @@ End;
 Function TAEORMEntityGeneratorSettings.GetAsJSON: TJSONObject;
 Var
   json, tablejson: TJSONObject;
-  table: String;
+  jarr: TJSONArray;
+  s: String;
 Begin
   Result := inherited;
+
+  If _implementationunits.Count > 0 Then
+  Begin
+    jarr := TJSONArray.Create;
+    Try
+      For s In _implementationunits Do
+        jarr.Add(s);
+    Finally
+      If jarr.Count = 0 Then
+        FreeAndNil(jarr)
+      Else
+        Result.AddPair(GENSET_IMPLEMENTATIONUNITS, jarr);
+    End;
+  End;
+
+  If _interfaceunits.Count > 0 Then
+  Begin
+    jarr := TJSONArray.Create;
+    Try
+      For s In _interfaceunits Do
+        jarr.Add(s);
+    Finally
+      If jarr.Count = 0 Then
+        FreeAndNil(jarr)
+      Else
+        Result.AddPair(GENSET_INTERFACEUNITS, jarr);
+    End;
+  End;
 
   If _tables.Count > 0 Then
   Begin
     json := TJSONObject.Create;
 
     Try
-      For table In _tables.Keys Do
+      For s In _tables.Keys Do
       Begin
-        tablejson := _tables[table].AsJSON;
+        tablejson := _tables[s].AsJSON;
 
         If tablejson.Count > 0 Then
-          json.AddPair(table, tablejson)
+          json.AddPair(s, tablejson)
         Else
           FreeAndNil(tablejson);
       End;
@@ -122,6 +175,20 @@ Begin
   End;
 End;
 
+Function TAEORMEntityGeneratorSettings.GetImplementationUnits: TArray<String>;
+Begin
+  Result := _implementationunits.ToArray;
+
+  TArray.Sort<String>(Result);
+End;
+
+Function TAEORMEntityGeneratorSettings.GetInterfaceUnits: TArray<String>;
+Begin
+  Result := _interfaceunits.ToArray;
+
+  TArray.Sort<String>(Result);
+End;
+
 Function TAEORMEntityGeneratorSettings.GetTable(Const inTableName: String): TAEORMEntityGeneratorTable;
 Begin
   If Not _tables.ContainsKey(inTableName) Then
@@ -141,6 +208,8 @@ Procedure TAEORMEntityGeneratorSettings.InternalClear;
 Begin
   inherited;
 
+  _implementationunits.Clear;
+  _interfaceunits.Clear;
   _tables.Clear;
 
   _globalvarprefix := 'F';
@@ -167,21 +236,37 @@ Begin
     Result := Result Or table.Changed;
 End;
 
+Procedure TAEORMEntityGeneratorSettings.RemoveImplementationUnit(Const inImplementationUnit: String);
+Begin
+  _implementationunits.Remove(inImplementationUnit);
+
+  Self.SetChanged;
+End;
+
 Procedure TAEORMEntityGeneratorSettings.SetAsJSON(Const inJSON: TJSONObject);
 Var
   jp: TJSONPair;
+  jv: TJSONValue;
 Begin
   inherited;
+
+  If inJSON.GetValue(GENSET_IMPLEMENTATIONUNITS) <> nil Then
+    For jv In TJSONArray(inJSON.GetValue(GENSET_IMPLEMENTATIONUNITS)) Do
+      _implementationunits.Add(jv.Value);
+
+  If inJSON.GetValue(GENSET_INTERFACEUNITS) <> nil Then
+    For jv In TJSONArray(inJSON.GetValue(GENSET_INTERFACEUNITS)) Do
+      _interfaceunits.Add(jv.Value);
 
   If inJSON.GetValue(GENSET_TABLES) <> nil Then
     For jp In TJSONObject(inJSON.GetValue(GENSET_TABLES)) Do
       _tables.Add(jp.JsonString.Value, TAEORMEntityGeneratorTable.NewFromJSON(jp.JsonValue) As TAEORMEntityGeneratorTable);
 
-  If inJSON.GetValue(GENSET_PREFIX) <> nil Then
-    _globalvarprefix := inJSON.GetValue(GENSET_PREFIX).Value;
-
   If inJSON.GetValue(GENSET_LOWERCASEVARS) <> nil Then
     _lowercasevars := TJSONBool(inJSON.GetValue(GENSET_LOWERCASEVARS)).AsBoolean;
+
+  If inJSON.GetValue(GENSET_PREFIX) <> nil Then
+    _globalvarprefix := inJSON.GetValue(GENSET_PREFIX).Value;
 End;
 
 Procedure TAEORMEntityGeneratorSettings.SetAsString(Const inJSONString: String);

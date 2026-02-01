@@ -67,6 +67,8 @@ Begin
 End;
 
 Procedure TAEORMEntityGenerator.AddFileHeader(Const inStringBuilder: TStringBuilder; Const inUnitName: String);
+Var
+  units, s: String;
 Begin
   Log(eglaGeneratingFileHeader, '', '', '');
 
@@ -80,7 +82,21 @@ Begin
   inStringBuilder.AppendLine;
   inStringBuilder.AppendLine('Interface');
   inStringBuilder.AppendLine;
-  inStringBuilder.AppendLine('Uses AE.ORM.Entity, ZDbcIntFs, AE.ORM.Entity.FieldValueList, AE.ORM.DBConnectionPool, AE.ORM.Entity.Collection;');
+  inStringBuilder.Append('Uses AE.ORM.Entity, ZDbcIntFs, AE.ORM.Entity.FieldValueList, AE.ORM.DBConnectionPool, AE.ORM.Entity.Collection');
+
+  units := '';
+
+  For s In _settings.InterfaceUnits Do
+    units := units + s + ', ';
+
+  If Not units.IsEmpty Then
+  Begin
+    units := units.Substring(0, units.Length - 2);
+
+    inStringBuilder.Append(', ' + units);
+  End;
+
+  inStringBuilder.AppendLine(';');
   inStringBuilder.AppendLine;
   inStringBuilder.AppendLine('Type');
 End;
@@ -121,7 +137,7 @@ End;
 
 Procedure TAEORMEntityGenerator.AddImplementation(Const inStringBuilder: TStringBuilder);
 Var
-  tableenum, fieldenum, allfields, allpkeys, pkeysql, pkeyencode, relfields, s: String;
+  tableenum, fieldenum, allfields, allpkeys, pkeysql, pkeyencode, relfields, units, s: String;
   table: TAEORMEntityGeneratorTable;
   field: TAEORMEntityGeneratorField;
   relation: TAEORMEntityGeneratorRelation;
@@ -133,7 +149,22 @@ Begin
   inStringBuilder.AppendLine;
   inStringBuilder.AppendLine('Implementation');
   inStringBuilder.AppendLine;
-  inStringBuilder.AppendLine('Uses AE.ORM.Entity.Helper, ZVariant, System.SysUtils, AE.ORM.Exceptions;');
+
+  inStringBuilder.Append('Uses AE.ORM.Entity.Helper, ZVariant, System.SysUtils, AE.ORM.Exceptions');
+
+  units := '';
+
+  For s In _settings.ImplementationUnits Do
+    units := units + s + ', ';
+
+  If Not units.IsEmpty Then
+  Begin
+    units := units.Substring(0, units.Length - 2);
+
+    inStringBuilder.Append(', ' + units);
+  End;
+
+  inStringBuilder.AppendLine(';');
 
   For tableenum In _settings.Tables Do
   Begin
@@ -341,6 +372,25 @@ Begin
     End;
 
     inStringBuilder.AppendLine('End;');
+
+    If Not table.AfterLoadExtraCode.IsEmpty Then
+    Begin
+      inStringBuilder.AppendLine;
+      inStringBuilder.AppendLine('Procedure ' + table.GeneratedClassName + '.InternalAfterLoad;');
+      inStringBuilder.AppendLine('Begin');
+      inStringBuilder.AppendLine(table.AfterLoadExtraCode);
+      inStringBuilder.AppendLine('End;');
+    End;
+
+    If Not table.BeforeSaveExtraCode.IsEmpty Then
+    Begin
+      inStringBuilder.AppendLine;
+      inStringBuilder.AppendLine('Procedure ' + table.GeneratedClassName + '.InternalBeforeSave;');
+      inStringBuilder.AppendLine('Begin');
+      inStringBuilder.AppendLine(table.BeforeSaveExtraCode);
+      inStringBuilder.AppendLine('End;');
+    End;
+
     inStringBuilder.AppendLine;
     inStringBuilder.AppendLine('Class Function ' + table.GeneratedClassName + '.SelectFieldNames: String;');
     inStringBuilder.AppendLine('Begin');
@@ -660,6 +710,13 @@ Begin
     End;
 
     inStringBuilder.AppendLine('  strict protected');
+
+    If Not table.AfterLoadExtraCode.IsEmpty Then
+      inStringBuilder.AppendLine('    Procedure InternalAfterLoad; Override;');
+
+    If Not table.BeforeSaveExtraCode.IsEmpty Then
+      inStringBuilder.AppendLine('    Procedure InternalBeforeSave; Override;');
+
     inStringBuilder.AppendLine('    Procedure InternalClear; Override;');
     inStringBuilder.AppendLine('    Procedure InternalGetChangedFieldValues(Const outChangedFieldValues: TAEORMFieldValueList); Override;');
     inStringBuilder.AppendLine('    Procedure InternalGetPrimaryKeyValues(Const outPrimaryKeyValues: TAEORMFieldValueList); Override;');
@@ -726,7 +783,7 @@ Begin
 
       inStringBuilder.Append(' Write ');
 
-      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Then
+      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Or (field.PropertyType <> field.VariableType) Then
         inStringBuilder.AppendLine('Set' + field.GeneratedPropertyName + ';')
       Else
         inStringBuilder.AppendLine(field.GeneratedVariableName + ';');
