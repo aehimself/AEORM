@@ -35,32 +35,44 @@ Type
 
   TAEORMEntityGeneratorField = Class(TAEORMEntityBase)
   strict private
-    _fieldtype: TAEORMEntityGeneratorFieldType;
     _generatedisnullpropertyname: String;
     _generatedisnullvariablename: String;
     _generatedoriginalpropertyname: String;
     _generatedoriginalvariablename: String;
+    _getterextracode: String;
+    _originalgetterextracode: String;
+    _propertytype: TAEORMEntityGeneratorFieldType;
     _readonly: Boolean;
     _required: Boolean;
-    Procedure SetFieldType(Const inFieldType: TAEORMEntityGeneratorFieldType);
+    _setterextracode: String;
+    _variabletype: TAEORMEntityGeneratorFieldType;
+    Procedure SetPropertyType(Const inPropertyType: TAEORMEntityGeneratorFieldType);
     Procedure SetGeneratedIsNullPropertyName(Const inGeneratedIsNullPropertyName: String);
     Procedure SetGeneratedIsNullVariableName(Const inGeneratedIsNullVariableName: String);
     Procedure SetGeneratedOriginalPropertyName(Const inGeneratedOriginalPropertyName: String);
     Procedure SetGeneratedOriginalVariableName(Const inGeneratedOriginalVariableName: String);
+    Procedure SetGetterExtraCode(Const inGetterExtraCode: String);
+    Procedure SetOriginalGetterExtraCode(Const inOriginalGetterExtraCode: String);
     Procedure SetReadOnly(Const inReadOnly: Boolean);
     Procedure SetRequired(Const inRequired: Boolean);
+    Procedure SetSetterExtraCode(Const inSetterExtraCode: String);
+    Procedure SetVariableType(Const inVariableType: TAEORMEntityGeneratorFieldType);
   strict protected
     Procedure InternalClear; Override;
     Procedure SetAsJSON(Const inJSON: TJSONObject); Override;
     Function GetAsJSON: TJSONObject; Override;
   public
-    Property FieldType: TAEORMEntityGeneratorFieldType Read _fieldtype Write SetFieldType;
     Property GeneratedIsNullPropertyName: String Read _generatedisnullpropertyname Write SetGeneratedIsNullPropertyName;
     Property GeneratedIsNullVariableName: String Read _generatedisnullvariablename Write SetGeneratedIsNullVariableName;
     Property GeneratedOriginalPropertyName: String Read _generatedoriginalpropertyname Write SetGeneratedOriginalPropertyName;
     Property GeneratedOriginalVariableName: String Read _generatedoriginalvariablename Write SetGeneratedOriginalVariableName;
+    Property GetterExtraCode: String Read _getterextracode Write SetGetterExtraCode;
+    Property OriginalGetterExtraCode: String Read _originalgetterextracode Write SetOriginalGetterExtraCode;
+    Property PropertyType: TAEORMEntityGeneratorFieldType Read _propertytype Write SetPropertyType;
     Property ReadOnly: Boolean Read _readonly Write SetReadOnly;
     Property Required: Boolean Read _required Write SetRequired;
+    Property SetterExtraCode: String Read _setterextracode Write SetSetterExtraCode;
+    Property VariableType: TAEORMEntityGeneratorFieldType Read _variabletype Write SetVariableType;
   End;
 
   TAEORMEntityGeneratorRelation = Class(TAEORMEntityBase)
@@ -107,6 +119,7 @@ Type
     Destructor Destroy; Override;
     Procedure AddIncomingRelation(Const inSourceTableName, inTargetTableName, inRelationName, inSourceFieldName, inTargetFieldName: String);
     Procedure AddOutgoingRelation(Const inSourceTableName, inTargetTableName, inRelationName, inSourceFieldName, inTargetFieldName: String);
+    Function ContainsField(Const inFieldName: String): Boolean;
     Function IncomingRelationField(Const inFieldName: String): Boolean;
     Function OutgoingRelationField(Const inFieldName: String): Boolean;
     Function RelationsExist: Boolean;
@@ -132,13 +145,17 @@ Const
   TABLE_INCOMINGRELATIONS = 'incomingrelations';
   TABLE_OUTGOINGRELATIONS = 'outgoingrelations';
 
-  FIELD_TYPE = 'fieldtype';
   FIELD_REQUIRED = 'required';
   FIELD_READONLY = 'readonly';
   FIELD_GENERATEDISNULLPROPERTYNAME = 'generatedisnullpropertyname';
   FIELD_GENERATEDISNULLVARIABLENAME = 'generatedisnullvariablename';
   FIELD_GENERATEDORIGINALPROPERTYNAME = 'generatedoriginalpropertyname';
   FIELD_GENERATEDORIGINALVARIABLENAME = 'generatedoriginalvariablename';
+  FIELD_GETTEREXTRACODE = 'getterextracode';
+  FIELD_ORIGINALGETTEREXTRACODE = 'originalgetterextracode';
+  FIELD_PROPERTYTYPE = 'propertytype';
+  FIELD_SETTEREXTRACODE = 'setterextracode';
+  FIELD_VARIABLETYPE = 'variabletype';
 
   RELATION_SOURCETABLE = 'sourcetable';
   RELATION_TARGETTABLE = 'targettable';
@@ -225,9 +242,6 @@ Function TAEORMEntityGeneratorField.GetAsJSON: TJSONObject;
 Begin
   Result := inherited;
 
-  If _fieldtype <> oftString Then
-    Result.AddPair(FIELD_TYPE, Integer(_fieldtype));
-
   If Not _generatedisnullpropertyname.IsEmpty Then
     Result.AddPair(FIELD_GENERATEDISNULLPROPERTYNAME, _generatedisnullpropertyname);
 
@@ -240,32 +254,48 @@ Begin
   If Not _generatedoriginalvariablename.IsEmpty Then
     Result.AddPair(FIELD_GENERATEDORIGINALVARIABLENAME, _generatedoriginalvariablename);
 
+  If Not _getterextracode.IsEmpty Then
+    Result.AddPair(FIELD_GETTEREXTRACODE, _getterextracode);
+
+  If Not _originalgetterextracode.IsEmpty Then
+    Result.AddPair(FIELD_ORIGINALGETTEREXTRACODE, _originalgetterextracode);
+
+  If _propertytype <> oftString Then
+    Result.AddPair(FIELD_PROPERTYTYPE, Integer(_propertytype));
+
   If _readonly Then
     Result.AddPair(FIELD_READONLY, TJSONBool.Create(_readonly));
 
   If _required Then
     Result.AddPair(FIELD_REQUIRED, TJSONBool.Create(_required));
+
+  If Not _setterextracode.IsEmpty Then
+    Result.AddPair(FIELD_SETTEREXTRACODE, _setterextracode);
+
+  If _variabletype <> oftString Then
+    Result.AddPair(FIELD_VARIABLETYPE, Integer(_variabletype));
 End;
 
 Procedure TAEORMEntityGeneratorField.InternalClear;
 Begin
   inherited;
 
-  _fieldtype := oftString;
   _generatedisnullpropertyname := '';
   _generatedisnullvariablename := '';
   _generatedoriginalpropertyname := '';
   _generatedoriginalvariablename := '';
+  _getterextracode := '';
+  _originalgetterextracode := '';
+  _propertytype := oftString;
   _readonly := False;
   _required := False;
+  _setterextracode := '';
+  _variabletype := oftString;
 End;
 
 Procedure TAEORMEntityGeneratorField.SetAsJSON(Const inJSON: TJSONObject);
 Begin
   inherited;
-
-  If inJSON.GetValue(FIELD_TYPE) <> nil Then
-    _fieldtype := TAEORMEntityGeneratorFieldType(TJSONNumber(inJSON.GetValue(FIELD_TYPE)).AsInt);
 
   If inJSON.GetValue(FIELD_GENERATEDISNULLPROPERTYNAME) <> nil Then
     _generatedisnullpropertyname := inJSON.GetValue(FIELD_GENERATEDISNULLPROPERTYNAME).Value;
@@ -279,19 +309,34 @@ Begin
   If inJSON.GetValue(FIELD_GENERATEDORIGINALVARIABLENAME) <> nil Then
     _generatedoriginalvariablename := inJSON.GetValue(FIELD_GENERATEDORIGINALVARIABLENAME).Value;
 
+  If inJSON.GetValue(FIELD_GETTEREXTRACODE) <> nil Then
+    _getterextracode := inJSON.GetValue(FIELD_GETTEREXTRACODE).Value;
+
+  If inJSON.GetValue(FIELD_ORIGINALGETTEREXTRACODE) <> nil Then
+    _originalgetterextracode := InJSON.GetValue(FIELD_ORIGINALGETTEREXTRACODE).Value;
+
+  If inJSON.GetValue(FIELD_PROPERTYTYPE) <> nil Then
+    _propertytype := TAEORMEntityGeneratorFieldType(TJSONNumber(inJSON.GetValue(FIELD_PROPERTYTYPE)).AsInt);
+
   If inJSON.GetValue(FIELD_READONLY) <> nil Then
     _readonly := TJSONBool(inJSON.GetValue(FIELD_READONLY)).AsBoolean;
 
   If inJSON.GetValue(FIELD_REQUIRED) <> nil Then
     _required := TJSONBool(inJSON.GetValue(FIELD_REQUIRED)).AsBoolean;
+
+  If inJSON.GetValue(FIELD_SETTEREXTRACODE) <> nil Then
+    _setterextracode := inJSON.GetValue(FIELD_SETTEREXTRACODE).Value;
+
+  If inJSON.GetValue(FIELD_VARIABLETYPE) <> nil Then
+    _variabletype := TAEORMEntityGeneratorFieldType(TJSONNumber(inJSON.GetValue(FIELD_VARIABLETYPE)).AsInt);
 End;
 
-Procedure TAEORMEntityGeneratorField.SetFieldType(Const inFieldType: TAEORMEntityGeneratorFieldType);
+Procedure TAEORMEntityGeneratorField.SetPropertyType(Const inPropertyType: TAEORMEntityGeneratorFieldType);
 Begin
-  If _fieldtype = inFieldType Then
+  If _propertytype = inPropertyType Then
     Exit;
 
-  _fieldtype := inFieldType;
+  _propertytype := inPropertyType;
 
   Self.SetChanged;
 End;
@@ -336,6 +381,26 @@ Begin
   Self.SetChanged;
 End;
 
+Procedure TAEORMEntityGeneratorField.SetGetterExtraCode(Const inGetterExtraCode: String);
+Begin
+  If _getterextracode = inGetterExtraCode Then
+    Exit;
+
+  _getterextracode := inGetterExtraCode;
+
+  Self.SetChanged;
+End;
+
+Procedure TAEORMEntityGeneratorField.SetOriginalGetterExtraCode(Const inOriginalGetterExtraCode: String);
+Begin
+  If _originalgetterextracode = inOriginalGetterExtraCode Then
+    Exit;
+
+  _originalgetterextracode := inOriginalGetterExtraCode;
+
+  Self.SetChanged;
+End;
+
 Procedure TAEORMEntityGeneratorField.SetReadOnly(Const inReadOnly: Boolean);
 Begin
   If _readonly = inReadOnly Then
@@ -352,6 +417,26 @@ Begin
     Exit;
 
   _required := inRequired;
+
+  Self.SetChanged;
+End;
+
+Procedure TAEORMEntityGeneratorField.SetSetterExtraCode(Const inSetterExtraCode: String);
+Begin
+  If _setterextracode = inSetterExtraCode Then
+    Exit;
+
+  _setterextracode := inSetterExtraCode;
+
+  Self.SetChanged;
+End;
+
+Procedure TAEORMEntityGeneratorField.SetVariableType(Const inVariableType: TAEORMEntityGeneratorFieldType);
+Begin
+  If _variabletype = inVariableType Then
+    Exit;
+
+  _variabletype := inVariableType;
 
   Self.SetChanged;
 End;
@@ -499,6 +584,11 @@ Begin
   End;
 
   relation.AddConnectedFields(inSourceFieldName, inTargetFieldName);
+End;
+
+Function TAEORMEntityGeneratorTable.ContainsField(Const inFieldName: String): Boolean;
+Begin
+  Result := _fields.ContainsKey(inFieldName);
 End;
 
 //

@@ -155,11 +155,11 @@ Begin
 
     For fieldenum In table.PrimaryKeys Do
     Begin
-      allpkeys := allpkeys + 'in' + fieldenum + ': ' + FIELDTYPE[table.Field[fieldenum].FieldType] + ', ';
+      allpkeys := allpkeys + 'in' + fieldenum + ': ' + FIELDTYPE[table.Field[fieldenum].PropertyType] + ', ';
 
       pkeysql := pkeysql + fieldenum + '=?,';
 
-      pkeyencode := pkeyencode + ENCODEMETHOD[table.Field[fieldenum].FieldType] + '(in' + fieldenum + '), ';
+      pkeyencode := pkeyencode + ENCODEMETHOD[table.Field[fieldenum].VariableType] + '(in' + fieldenum + '), ';
     End;
 
     If Not allpkeys.IsEmpty Then
@@ -240,9 +240,9 @@ Begin
       field := table.Field[fieldenum];
 
       If Not field.ReadOnly Then
-        inStringBuilder.AppendLine('  ' + field.GeneratedOriginalVariableName + ' := ' + INITIALVALUE[field.FieldType] + ';');
+        inStringBuilder.AppendLine('  ' + field.GeneratedOriginalVariableName + ' := ' + INITIALVALUE[field.VariableType] + ';');
 
-      inStringBuilder.AppendLine('  ' + field.GeneratedVariableName + ' := ' + INITIALVALUE[field.FieldType] + ';');
+      inStringBuilder.AppendLine('  ' + field.GeneratedVariableName + ' := ' + INITIALVALUE[field.VariableType] + ';');
 
       If Not field.Required Then
         inStringBuilder.AppendLine('  ' + field.GeneratedIsNullVariableName + ' := True;');
@@ -364,6 +364,18 @@ Begin
         inStringBuilder.AppendLine('  Result := ' + field.GeneratedVariableName + ' <> ' + field.GeneratedOriginalVariableName + ';');
         inStringBuilder.AppendLine('End;');
       End;
+
+      If Not field.OriginalGetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+      Begin
+        inStringBuilder.AppendLine;
+        inStringBuilder.AppendLine('Function ' + table.GeneratedClassName + '.Get' + field.GeneratedOriginalPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ';');
+        inStringBuilder.AppendLine('Begin');
+
+        If Not field.OriginalGetterExtraCode.IsEmpty Then
+          inStringBuilder.AppendLine(field.OriginalGetterExtraCode);
+
+        inStringBuilder.AppendLine('End;');
+      End;
     End;
 
     // Single objects which are connected to this one (based on incoming relations)
@@ -399,10 +411,10 @@ Begin
           inStringBuilder.AppendLine('    If ' + table.Field[relation.SourceFields[a]].GeneratedIsNullVariableName + ' Then');
           inStringBuilder.AppendLine('      params[' + a.ToString + '] := EncodeNull');
           inStringBuilder.AppendLine('    Else');
-          inStringBuilder.AppendLine('      params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.SourceFields[a]].FieldType] + '(' + table.Field[relation.SourceFields[a]].GeneratedVariableName + ');');
+          inStringBuilder.AppendLine('      params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.SourceFields[a]].VariableType] + '(' + table.Field[relation.SourceFields[a]].GeneratedVariableName + ');');
         End
         Else
-          inStringBuilder.AppendLine('    params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.SourceFields[a]].FieldType] + '(' + table.Field[relation.SourceFields[a]].GeneratedVariableName + ');');
+          inStringBuilder.AppendLine('    params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.SourceFields[a]].VariableType] + '(' + table.Field[relation.SourceFields[a]].GeneratedVariableName + ');');
       End;
 
       inStringBuilder.AppendLine;
@@ -445,10 +457,10 @@ Begin
           inStringBuilder.AppendLine('    If ' + table.Field[relation.TargetFields[a]].GeneratedIsNullVariableName + ' Then');
           inStringBuilder.AppendLine('      params[' + a.ToString + '] := EncodeNull');
           inStringBuilder.AppendLine('    Else');
-          inStringBuilder.AppendLine('      params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.TargetFields[a]].FieldType] + '(' + table.Field[relation.TargetFields[a]].GeneratedVariableName + ');');
+          inStringBuilder.AppendLine('      params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.TargetFields[a]].VariableType] + '(' + table.Field[relation.TargetFields[a]].GeneratedVariableName + ');');
         End
         Else
-          inStringBuilder.AppendLine('    params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.TargetFields[a]].FieldType] + '(' + table.Field[relation.TargetFields[a]].GeneratedVariableName + ');');
+          inStringBuilder.AppendLine('    params[' + a.ToString + '] := ' + ENCODEMETHOD[table.Field[relation.TargetFields[a]].VariableType] + '(' + table.Field[relation.TargetFields[a]].GeneratedVariableName + ');');
       End;
 
       inStringBuilder.AppendLine;
@@ -466,15 +478,21 @@ Begin
 
       field := table.Field[fieldenum];
 
-      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Then
+      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Or Not field.SetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
       Begin
         inStringBuilder.AppendLine;
-        inStringBuilder.AppendLine('Procedure ' + table.GeneratedClassName + '.Set' + field.GeneratedPropertyName + '(Const in' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.FieldType] + ');');
+        inStringBuilder.AppendLine('Procedure ' + table.GeneratedClassName + '.Set' + field.GeneratedPropertyName + '(Const in' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ');');
         inStringBuilder.AppendLine('Begin');
-        inStringBuilder.AppendLine('  If ' + field.GeneratedVariableName + ' = in' + field.GeneratedPropertyName + ' Then');
+
+        inStringBuilder.AppendLine('  If Self.' + field.GeneratedPropertyName + ' = in' + field.GeneratedPropertyName + ' Then');
         inStringBuilder.AppendLine('    Exit;');
         inStringBuilder.AppendLine;
-        inStringBuilder.AppendLine('  ' + field.GeneratedVariableName + ' := in' + field.GeneratedPropertyName + ';');
+
+        If field.PropertyType = field.VariableType Then
+          inStringBuilder.AppendLine('  ' + field.GeneratedVariableName + ' := in' + field.GeneratedPropertyName + ';');
+
+        If Not field.SetterExtraCode.IsEmpty Then
+          inStringBuilder.AppendLine(field.SetterExtraCode);
 
         If Not field.Required Then
           inStringBuilder.AppendLine('  ' + field.GeneratedisNullVariableName + ' := False;');
@@ -506,8 +524,23 @@ Begin
           inStringBuilder.AppendLine;
           inStringBuilder.AppendLine('Procedure ' + table.GeneratedClassName + '.Set' + field.GeneratedPropertyName + 'ToNull;');
           inStringBuilder.AppendLine('Begin');
-          inStringBuilder.AppendLine('  ' + field.GeneratedVariableName + ' := ' + INITIALVALUE[field.FieldType] + ';');
+          inStringBuilder.AppendLine('  ' + field.GeneratedVariableName + ' := ' + INITIALVALUE[field.VariableType] + ';');
           inStringBuilder.AppendLine('  ' + field.GeneratedIsNullVariableName + ' := True;');
+          inStringBuilder.AppendLine('End;');
+        End;
+
+        If Not field.GetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+        Begin
+          inStringBuilder.AppendLine;
+          inStringBuilder.AppendLine('Function ' + table.GeneratedClassName + '.Get' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ';');
+          inStringBuilder.AppendLine('Begin');
+
+          If field.PropertyType = field.VariableType Then
+            inStringBuilder.AppendLine('  Result := ' + field.GeneratedVariableName + ';');
+
+          If Not field.GetterExtraCode.IsEmpty Then
+            inStringBuilder.AppendLine(field.GetterExtraCode);
+
           inStringBuilder.AppendLine('End;');
         End;
       End;
@@ -572,7 +605,7 @@ Begin
     allpkeys := '';
 
     For fieldenum In table.PrimaryKeys Do
-      allpkeys := allpkeys + 'in' + fieldenum + ': ' + FIELDTYPE[table.Field[fieldenum].FieldType] + ', ';
+      allpkeys := allpkeys + 'in' + fieldenum + ': ' + FIELDTYPE[table.Field[fieldenum].PropertyType] + ', ';
 
     If Not allpkeys.IsEmpty Then
       allpkeys := allpkeys.Substring(0, allpkeys.Length - 2);
@@ -595,9 +628,9 @@ Begin
       field := table.Field[fieldenum];
 
       If Not field.ReadOnly Then
-        inStringBuilder.AppendLine('    ' + field.GeneratedOriginalVariableName + ': ' + FIELDTYPE[field.FieldType] + ';');
+        inStringBuilder.AppendLine('    ' + field.GeneratedOriginalVariableName + ': ' + FIELDTYPE[field.VariableType] + ';');
 
-      inStringBuilder.AppendLine('    ' + field.GeneratedVariableName + ': ' + FIELDTYPE[field.FieldType] + ';');
+      inStringBuilder.AppendLine('    ' + field.GeneratedVariableName + ': ' + FIELDTYPE[field.VariableType] + ';');
 
       If Not field.Required Then
         inStringBuilder.AppendLine('    ' + field.GeneratedIsNullVariableName + ': Boolean;');
@@ -616,8 +649,14 @@ Begin
     Begin
       field := table.Field[fieldenum];
 
-      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Then
-        inStringBuilder.AppendLine('    Procedure Set' + field.GeneratedPropertyName + '(Const in' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.FieldType] + ');');
+      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Or Not field.SetterExtraCode.IsEmpty Then
+        inStringBuilder.AppendLine('    Procedure Set' + field.GeneratedPropertyName + '(Const in' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ');');
+
+      If Not field.GetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+        inStringBuilder.AppendLine('    Function Get' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ';');
+
+      If Not field.OriginalGetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+        inStringBuilder.AppendLine('    Function Get' + field.GeneratedOriginalPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ';');
     End;
 
     inStringBuilder.AppendLine('  strict protected');
@@ -669,9 +708,23 @@ Begin
       field := table.Field[fieldenum];
 
       If Not field.ReadOnly Then
-        inStringBuilder.AppendLine('    Property ' + field.GeneratedOriginalPropertyName + ': ' + FIELDTYPE[field.FieldType] + ' Read ' + field.GeneratedOriginalVariableName + ';');
+      Begin
+        inStringBuilder.Append('    Property ' + field.GeneratedOriginalPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ' Read ');
 
-      inStringBuilder.Append('    Property ' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.FieldType] + ' Read ' + field.GeneratedVariableName + ' Write ');
+        If Not field.OriginalGetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+          inStringBuilder.AppendLine('Get' + field.GeneratedOriginalPropertyName + ';')
+        Else
+          inStringBuilder.AppendLine(field.GeneratedOriginalVariableName + ';')
+      End;
+
+      inStringBuilder.Append('    Property ' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ' Read ');
+
+      If Not field.GetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+        inStringBuilder.Append('Get' + field.GeneratedPropertyName)
+      Else
+        inStringBuilder.Append(field.GeneratedVariableName);
+
+      inStringBuilder.Append(' Write ');
 
       If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Then
         inStringBuilder.AppendLine('Set' + field.GeneratedPropertyName + ';')
@@ -792,7 +845,8 @@ Begin
 
       field.ReadOnly := resultset.GetBoolean(23); // READONLY
       field.Required := resultset.GetBoolean(10); // NULLABLE
-      field.FieldType := ftype;
+      field.PropertyType := ftype;
+      field.VariableType := ftype;
 
       Log(eglaFieldDiscovered, table, fname, '');
     End;
@@ -812,7 +866,7 @@ End;
 
 Procedure TAEORMEntityGenerator.DiscoverRelations;
 Var
-  tableenum: String;
+  tableenum, sourcefield, targetfield, fieldenum: String;
   table: TAEORMEntityGeneratorTable;
   metadata: IZDatabaseMetadata;
   resultset: IZResultSet;
@@ -831,12 +885,47 @@ Begin
       // We are only interested in relations where the connected table is also in our discovery
       If _settings.ContainsTable(resultset.GetString(2)) Then // PKTABLE_NAME
       Begin
+        sourcefield := resultset.GetString(3); // PKCOLUMN_NAME
+        targetfield := resultset.GetString(7); // FKCOLUMN_NAME
+
+        If Not table.ContainsField(targetfield) Then
+        Begin
+          targetfield := '';
+
+          For fieldenum In table.Fields Do
+            If fieldenum.ToLower = targetfield Then
+            Begin
+              targetfield := fieldenum;
+
+              Break;
+            End;
+
+          If targetfield.IsEmpty Then
+            Continue;
+        End;
+
+        If Not _settings.Table[resultset.GetString(2)].ContainsField(sourcefield) Then
+        Begin
+          sourcefield := '';
+
+          For fieldenum In _settings.Table[resultset.GetString(2)].Fields Do
+            If fieldenum.ToLower = sourcefield.ToLower Then
+            Begin
+              sourcefield := fieldenum;
+
+              Break;
+            End;
+
+          If sourcefield.IsEmpty Then
+            Continue;
+        End;
+
         table.AddIncomingRelation(
           resultset.GetString(2), // inSourceTableName, PKTABLE_NAME
           resultset.GetString(6), // inTargetTableName, FKTABLE_NAME
           resultset.GetString(11), // inRelationName, FK_NAME
-          resultset.GetString(3), // inSourceFieldName, PKCOLUMN_NAME
-          resultset.GetString(7) // inRemoteFieldName, FKCOLUMN_NAME
+          sourcefield, // inSourceFieldName
+          targetfield // inTargetFieldName
         );
 
         Log(eglaRelationDiscovered, '', '', resultset.GetString(11)); // FK_NAME
@@ -850,12 +939,47 @@ Begin
       // We are only interested in relations where the connected table is also in our discovery
       If _settings.ContainsTable(resultset.GetString(6)) Then // FKTABLE_NAME
       Begin
+        sourcefield := resultset.GetString(3); // PKCOLUMN_NAME
+        targetfield := resultset.GetString(7); // FKCOLUMN_NAME
+
+        If Not table.ContainsField(sourcefield) Then
+        Begin
+          sourcefield := '';
+
+          For fieldenum In table.Fields Do
+            If fieldenum.ToLower = sourcefield Then
+            Begin
+              sourcefield := fieldenum;
+
+              Break;
+            End;
+
+          If sourcefield.IsEmpty Then
+            Continue;
+        End;
+
+        If Not _settings.Table[resultset.GetString(2)].ContainsField(targetfield) Then
+        Begin
+          targetfield := '';
+
+          For fieldenum In _settings.Table[resultset.GetString(2)].Fields Do
+            If fieldenum.ToLower = targetfield.ToLower Then
+            Begin
+              targetfield := fieldenum;
+
+              Break;
+            End;
+
+          If targetfield.IsEmpty Then
+            Continue;
+        End;
+
         table.AddOutgoingRelation(
           resultset.GetString(2), // inSourceTableName, PKTABLE_NAME
           resultset.GetString(6), // inTargetTableName, FKTABLE_NAME
           resultset.GetString(11), // inRelationName, FK_NAME
-          resultset.GetString(3), // inSourceFieldName, PKCOLUMN_NAME
-          resultset.GetString(7) // inRemoteFieldName, FKCOLUMN_NAME
+          sourcefield, // inSourceFieldName
+          targetfield // inTargetFieldName
         );
 
         Log(eglaRelationDiscovered, '', '', resultset.GetString(11)); // FK_NAME
