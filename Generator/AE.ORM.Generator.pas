@@ -950,7 +950,7 @@ Begin
           targetfield := '';
 
           For fieldenum In table.Fields Do
-            If fieldenum.ToLower = targetfield Then
+            If fieldenum.ToLower = resultset.GetString(7) Then
             Begin
               targetfield := fieldenum;
 
@@ -966,7 +966,7 @@ Begin
           sourcefield := '';
 
           For fieldenum In _settings.Table[resultset.GetString(2)].Fields Do
-            If fieldenum.ToLower = sourcefield.ToLower Then
+            If fieldenum.ToLower = resultset.GetString(3).ToLower Then
             Begin
               sourcefield := fieldenum;
 
@@ -1004,7 +1004,7 @@ Begin
           sourcefield := '';
 
           For fieldenum In table.Fields Do
-            If fieldenum.ToLower = sourcefield Then
+            If fieldenum.ToLower = resultset.GetString(3).ToLower Then
             Begin
               sourcefield := fieldenum;
 
@@ -1020,7 +1020,7 @@ Begin
           targetfield := '';
 
           For fieldenum In _settings.Table[resultset.GetString(2)].Fields Do
-            If fieldenum.ToLower = targetfield.ToLower Then
+            If fieldenum.ToLower = resultset.GetString(7).ToLower Then
             Begin
               targetfield := fieldenum;
 
