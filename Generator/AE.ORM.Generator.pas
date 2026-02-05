@@ -103,41 +103,32 @@ End;
 
 Procedure TAEORMEntityGenerator.AddForwardDeclarations(Const inStringBuilder: TStringBuilder);
 Var
-  table, prevrel: String;
-  relation: TAEORMEntityGeneratorRelation;
+  tableenum, relationenum: String;
 Begin
   Log(eglaGeneratingForwardDeclarations, '', '', '');
 
   inStringBuilder.AppendLine('  // Forward declarations to make sure circular recerences will be valid');
 
-  For table In _settings.Tables Do
+  For tableenum In _settings.Tables Do
   Begin
-    Log(eglaGeneratingForwardDeclarations, table, '', '');
+    Log(eglaGeneratingForwardDeclarations, tableenum, '', '');
 
     inStringBuilder.AppendLine;
-    inStringBuilder.AppendLine('  ' + _settings.Table[table].GeneratedClassName + ' = Class;');
-  End;
+    inStringBuilder.AppendLine('  ' + _settings.Table[tableenum].GeneratedClassName + ' = Class;');
 
-  For table In _settings.Tables Do
-  Begin
-    prevrel := '';
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      Log(eglaGeneratingForwardDeclarations, tableenum, '', relationenum);
 
-    For relation In _settings.Table[table].OutgoingRelations Do
-      If relation.GeneratedClassName <> prevrel Then
-      Begin
-        Log(eglaGeneratingForwardDeclarations, table, '', relation.RelationName);
-
-        inStringBuilder.AppendLine;
-        inStringBuilder.AppendLine('  ' + relation.GeneratedClassName + ' = Class;');
-
-        prevrel := relation.GeneratedClassName;
-      End;
+      inStringBuilder.AppendLine;
+      inStringBuilder.AppendLine('  ' + _settings.Relation[relationenum].GeneratedClassName + ' = Class;');
+    End;
   End;
 End;
 
 Procedure TAEORMEntityGenerator.AddImplementation(Const inStringBuilder: TStringBuilder);
 Var
-  tableenum, fieldenum, allfields, allpkeys, pkeysql, pkeyencode, relfields, units, s: String;
+  tableenum, fieldenum, allfields, allpkeys, pkeysql, pkeyencode, relfields, units, s, relationenum: String;
   table: TAEORMEntityGeneratorTable;
   field: TAEORMEntityGeneratorField;
   relation: TAEORMEntityGeneratorRelation;
@@ -207,7 +198,7 @@ Begin
     inStringBuilder.AppendLine('// ' + table.GeneratedClassName);
     inStringBuilder.AppendLine('//');
 
-    If table.RelationsExist Then
+    If _settings.RelationsExistForTable(tableenum) Then
     Begin
       inStringBuilder.AppendLine;
       inStringBuilder.AppendLine('Constructor ' + table.GeneratedClassName + '.Create(Const inConnectionPool: TAEORMDBConnectionPool);');
@@ -216,12 +207,18 @@ Begin
       inStringBuilder.AppendLine;
 
       // Single objects which are connected to this one (based on incoming relations)
-      For relation In table.IncomingRelations Do
-        inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + ' := ' + _settings.Table[relation.SourcetableName].GeneratedClassName + '.Create(inConnectionPool);');
+      For relationenum In _settings.SingleEntityRelations(tableenum) Do
+      Begin
+        relation := _settings.Relation[relationenum];
+
+        inStringBuilder.AppendLine('  ' + relation.SingleEntityGeneratedVariableName + ' := ' + _settings.Table[relation.SourcetableName].GeneratedClassName + '.Create(inConnectionPool);');
+      End;
 
       // Object collections which are connected to this one (based on outgoing relation)
-      For relation In table.OutgoingRelations Do
+      For relationenum In _settings.EntityCollectionRelations(tableenum) Do
       Begin
+        relation := _settings.Relation[relationenum];
+
         inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + ' := ' + relation.GeneratedClassName + '.Create(inConnectionPool);');
         inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + '.Parent := Self;');
       End;
@@ -232,12 +229,20 @@ Begin
       inStringBuilder.AppendLine('Begin');
 
       // Single objects which are connected to this one (based on incoming relations)
-      For relation In table.IncomingRelations Do
-        inStringBuilder.AppendLine('  FreeAndNil(' + relation.GeneratedVariableName + ');');
+      For relationenum In _settings.SingleEntityRelations(tableenum) Do
+      Begin
+        relation := _settings.Relation[relationenum];
+
+        inStringBuilder.AppendLine('  FreeAndNil(' + relation.SingleEntityGeneratedVariableName + ');');
+      End;
 
       // Object collections which are connected to this one (based on outgoing relation)
-      For relation In table.OutgoingRelations Do
+      For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+      Begin
+        relation := _settings.Relation[relationenum];
+
         inStringBuilder.AppendLine('  FreeAndNil(' + relation.GeneratedVariableName + ');');
+      End;
 
       inStringBuilder.AppendLine;
       inStringBuilder.AppendLine('  inherited;');
@@ -260,11 +265,19 @@ Begin
     inStringBuilder.AppendLine('  inherited;');
     inStringBuilder.AppendLine;
 
-    For relation In table.IncomingRelations Do
-      inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + '.Clear;');
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
 
-    For relation In table.OutgoingRelations Do
       inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + '.Clear;');
+    End;
+
+    For relationenum In _settings.SingleEntityRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
+      inStringBuilder.AppendLine('  ' + relation.SingleEntityGeneratedVariableName + '.Clear;');
+    End;
 
     For fieldenum In table.Fields Do
     Begin
@@ -429,9 +442,11 @@ Begin
     End;
 
     // Single objects which are connected to this one (based on incoming relations)
-    For relation In table.IncomingRelations Do
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
     Begin
-      Log(eglaGeneratingImplementation, tableenum, '', relation.RelationName);
+      relation := _settings.Relation[relationenum];
+
+      Log(eglaGeneratingImplementation, tableenum, '', relationenum);
 
       relfields := '';
 
@@ -442,7 +457,7 @@ Begin
         relfields := relfields.Substring(0, relfields.Length - 1);
 
       inStringBuilder.AppendLine;
-      inStringBuilder.AppendLine('Function ' + table.GeneratedClassName + '.Get' + relation.GeneratedPropertyName + ': ' + _settings.Table[relation.SourceTableName].GeneratedClassName + ';');
+      inStringBuilder.AppendLine('Function ' + table.GeneratedClassName + '.Get' + relation.GeneratedPropertyName + ': ' + relation.GeneratedClassName + ';');
       inStringBuilder.AppendLine('Var');
       inStringBuilder.AppendLine('  params: TZVariantDynArray;');
       inStringBuilder.AppendLine('Begin');
@@ -475,9 +490,11 @@ Begin
       inStringBuilder.AppendLine('End;');
     End;
 
-    For relation In table.OutgoingRelations Do
+    For relationenum In _settings.SingleEntityRelations(tableenum) Do
     Begin
-      Log(eglaGeneratingImplementation, tableenum, '', relation.RelationName);
+      relation := _settings.Relation[relationenum];
+
+      Log(eglaGeneratingImplementation, tableenum, '', relationenum);
 
       relfields := '';
 
@@ -488,11 +505,11 @@ Begin
         relfields := relfields.Substring(0, relfields.Length - 1);
 
       inStringBuilder.AppendLine;
-      inStringBuilder.AppendLine('Function ' + table.GeneratedClassName + '.Get' + relation.GeneratedPropertyName + ': ' + relation.GeneratedClassName + ';');
+      inStringBuilder.AppendLine('Function ' + table.GeneratedClassName + '.Get' + relation.SingleEntityGeneratedPropertyName + ': ' + relation.SingleEntityGeneratedClassName + ';');
       inStringBuilder.AppendLine('Var');
       inStringBuilder.AppendLine('  params: TZVariantDynArray;');
       inStringBuilder.AppendLine('Begin');
-      inStringBuilder.AppendLine('  If Not ' + relation.GeneratedVariableName + '.Loaded Then');
+      inStringBuilder.AppendLine('  If Not ' + relation.SingleEntityGeneratedVariableName + '.Loaded Then');
       inStringBuilder.AppendLine('  Begin');
       inStringBuilder.AppendLine('    SetLength(params, ' + Length(relation.TargetFields).ToString + ');');
 
@@ -514,13 +531,12 @@ Begin
       End;
 
       inStringBuilder.AppendLine;
-      inStringBuilder.AppendLine('    ' + relation.GeneratedVariableName + '.Load(''' + relfields + ''', params);');
+      inStringBuilder.AppendLine('    ' + relation.SingleEntityGeneratedVariableName + '.Load(''' + relfields + ''', params);');
       inStringBuilder.AppendLine('  End;');
       inStringBuilder.AppendLine;
-      inStringBuilder.AppendLine('  Result := ' + relation.GeneratedVariableName + ';');
+      inStringBuilder.AppendLine('  Result := ' + relation.SingleEntityGeneratedVariableName + ';');
       inStringBuilder.AppendLine('End;');
     End;
-
 
     For fieldenum In table.Fields Do
     Begin
@@ -528,7 +544,7 @@ Begin
 
       field := table.Field[fieldenum];
 
-      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Or Not field.SetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
+      If Not field.Required Or _settings.AnyRelationField(tableenum, fieldenum) Or Not field.SetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
       Begin
         inStringBuilder.AppendLine;
         inStringBuilder.AppendLine('Procedure ' + table.GeneratedClassName + '.Set' + field.GeneratedPropertyName + '(Const in' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ');');
@@ -547,24 +563,32 @@ Begin
         If Not field.Required Then
           inStringBuilder.AppendLine('  ' + field.GeneratedisNullVariableName + ' := False;');
 
-        If table.IncomingRelationField(fieldenum) Then
+        If _settings.SingleEntityRelationField(tableenum, fieldenum) Then
         Begin
           inStringBuilder.AppendLine;
 
-          For relation In table.IncomingRelations Do
+          For relationenum In _settings.SingleEntityRelations(tableenum) Do
+          Begin
+            relation := _settings.Relation[relationenum];
+
             For s In relation.TargetFields Do
               If s = fieldenum Then
-                inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + '.Clear;');
+                inStringBuilder.AppendLine('  ' + relation.SingleEntityGeneratedVariableName + '.Clear;');
+          End;
         End;
 
-        If table.OutgoingRelationField(fieldenum) Then
+        If _settings.EntityCollectionRelationField(tableenum, fieldenum) Then
         Begin
           inStringBuilder.AppendLine;
 
-          For relation In table.OutgoingRelations Do
+          For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+          Begin
+            relation := _settings.Relation[relationenum];
+
             For s In relation.SourceFields Do
               If s = fieldenum Then
                 inStringBuilder.AppendLine('  ' + relation.GeneratedVariableName + '.Clear;');
+          End;
         End;
 
         inStringBuilder.AppendLine('End;');
@@ -603,10 +627,13 @@ Begin
 
     s := '';
 
-    For relation In table.OutgoingRelations Do
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
       If s <> relation.GeneratedClassName Then
       Begin
-        Log(eglaGeneratingImplementation, tableenum, '', relation.RelationName);
+        Log(eglaGeneratingImplementation, tableenum, '', relationenum);
 
         inStringBuilder.AppendLine;
         inStringBuilder.AppendLine('//');
@@ -631,12 +658,13 @@ Begin
 
         s := relation.GeneratedClassName;
       End;
+    End;
   End;
 End;
 
 Procedure TAEORMEntityGenerator.AddInterfaceDeclarations(Const inStringBuilder: TStringBuilder);
 Var
-  tableenum, fieldenum, allpkeys, tmp: String;
+  tableenum, fieldenum, allpkeys, tmp, relationenum: String;
   table: TAEORMEntityGeneratorTable;
   field: TAEORMEntityGeneratorField;
   relation: TAEORMEntityGeneratorRelation;
@@ -665,12 +693,20 @@ Begin
     inStringBuilder.AppendLine('  strict private');
 
     // Single objects which are connected to this one (based on incoming relations)
-    For relation In table.IncomingRelations Do
-      inStringBuilder.AppendLine('    ' + relation.GeneratedVariableName + ': ' + _settings.Table[relation.SourcetableName].GeneratedClassName + ';');
+    For relationenum In _settings.SingleEntityRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
+      inStringBuilder.AppendLine('    ' + relation.SingleEntityGeneratedVariableName + ': ' + _settings.Table[relation.SourcetableName].GeneratedClassName + ';');
+    End;
 
     // Object collections which are connected to this one (based on outgoing relation)
-    For relation In table.OutgoingRelations Do
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
       inStringBuilder.AppendLine('    ' + relation.GeneratedVariableName + ': ' + relation.GeneratedClassName + ';');
+    End;
 
     // Variables for holding field data
     For fieldenum In table.Fields Do
@@ -687,19 +723,27 @@ Begin
     End;
 
     // Getter methods for single objects which are connected to this one (based on incoming relations)
-    For relation In table.IncomingRelations Do
-      inStringBuilder.AppendLine('    Function Get' + relation.GeneratedPropertyName + ': ' + _settings.Table[relation.SourceTableName].GeneratedClassName + ';');
+    For relationenum In _settings.SingleEntityRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
+      inStringBuilder.AppendLine('    Function Get' + relation.SingleEntityGeneratedPropertyName + ': ' + relation.SingleEntityGeneratedClassName + ';');
+    End;
 
     // Getter methods for object collections which are connected to this one (based on outgoing relation)
-    For relation In table.OutgoingRelations Do
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
       inStringBuilder.AppendLine('    Function Get' + relation.GeneratedPropertyName + ': ' + relation.GeneratedClassName + ';');
+    End;
 
     // Setter methods for fields which can be null OR which are used for object connections (based on incoming relations)
     For fieldenum In table.Fields Do
     Begin
       field := table.Field[fieldenum];
 
-      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Or Not field.SetterExtraCode.IsEmpty Then
+      If Not field.Required Or _settings.AnyRelationField(tableenum, fieldenum) Or Not field.SetterExtraCode.IsEmpty Then
         inStringBuilder.AppendLine('    Procedure Set' + field.GeneratedPropertyName + '(Const in' + field.GeneratedPropertyName + ': ' + FIELDTYPE[field.PropertyType] + ');');
 
       If Not field.GetterExtraCode.IsEmpty Or (field.PropertyType <> field.VariableType) Then
@@ -725,7 +769,7 @@ Begin
     inStringBuilder.AppendLine('    Class Function TableName: String; Override;');
     inStringBuilder.AppendLine('    Class Function SelectFieldNames: String; Override;');
 
-    If table.RelationsExist Then
+    If _settings.TableHasAnyRelations(tableenum) Then
     Begin
       inStringBuilder.AppendLine('    Constructor Create(Const inConnectionPool: TAEORMDBConnectionPool); Override;');
       inStringBuilder.AppendLine('    Destructor Destroy; Override;');
@@ -752,12 +796,20 @@ Begin
     End;
 
     // Single objects which are connected to this one (based on outgoing relations)
-    For relation In table.IncomingRelations Do
-      inStringBuilder.AppendLine('    Property ' + relation.GeneratedPropertyName + ': ' + _settings.Table[relation.SourceTableName].GeneratedClassName + ' Read Get' + relation.GeneratedPropertyName + ';');
+    For relationenum In _settings.SingleEntityRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
+      inStringBuilder.AppendLine('    Property ' + relation.SingleEntityGeneratedPropertyName + ': ' + _settings.Table[relation.SourceTableName].GeneratedClassName + ' Read Get' + relation.SingleEntityGeneratedPropertyName + ';');
+    End;
 
     // Object collections which are connected to this one (based on outgoing relation)
-    For relation In table.OutgoingRelations Do
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
       inStringBuilder.AppendLine('    Property ' + relation.GeneratedPropertyName + ': ' + relation.GeneratedClassName + ' Read Get' + relation.GeneratedPropertyName + ';');
+    End;
 
     // Field properties
     For fieldenum In table.Fields Do
@@ -783,7 +835,7 @@ Begin
 
       inStringBuilder.Append(' Write ');
 
-      If Not field.Required Or table.IncomingRelationField(fieldenum) Or table.OutgoingRelationField(fieldenum) Or (field.PropertyType <> field.VariableType) Then
+      If Not field.Required Or _settings.AnyRelationField(tableenum, fieldenum) Or (field.PropertyType <> field.VariableType) Then
         inStringBuilder.AppendLine('Set' + field.GeneratedPropertyName + ';')
       Else
         inStringBuilder.AppendLine(field.GeneratedVariableName + ';');
@@ -801,10 +853,13 @@ Begin
 
     tmp := '';
 
-    For relation In table.OutgoingRelations Do
+    For relationenum In _settings.EntityCollectionRelations(tableenum) Do
+    Begin
+      relation := _settings.Relation[relationenum];
+
       If tmp <> relation.GeneratedClassName Then
       Begin
-        Log(eglaGeneratingInterfaceSection, tableenum, '', relation.RelationName);
+        Log(eglaGeneratingInterfaceSection, tableenum, '', relationenum);
 
         inStringBuilder.AppendLine;
         inStringBuilder.AppendLine('  ' + relation.GeneratedClassName + ' = Class(TAEORMEntityCollection<' + _settings.Table[relation.TargetTableName].GeneratedClassName + '>)');
@@ -818,6 +873,7 @@ Begin
 
         tmp := relation.GeneratedClassName;
       End;
+    End;
   End;
 End;
 
@@ -914,7 +970,7 @@ Begin
 
     While resultset.Next Do
     Begin
-      _settings.Table[table].PrimaryKeys.Add(resultset.GetString(3)); // COLUMN_NAME
+      _settings.Table[table].Field[resultset.GetString(3)].PrimaryKey := True; // COLUMN_NAME
 
       Log(eglaPrimaryKeyDiscovered, table, resultset.GetString(3), '');
     End;
@@ -977,11 +1033,11 @@ Begin
             Continue;
         End;
 
-        table.AddIncomingRelation(
-          resultset.GetString(2), // inSourceTableName, PKTABLE_NAME
-          resultset.GetString(6), // inTargetTableName, FKTABLE_NAME
+        _settings.AddRelation(
           resultset.GetString(11), // inRelationName, FK_NAME
+          resultset.GetString(2), // inSourceTableName, PKTABLE_NAME
           sourcefield, // inSourceFieldName
+          resultset.GetString(6), // inTargetTableName, FKTABLE_NAME
           targetfield // inTargetFieldName
         );
 
@@ -1031,11 +1087,11 @@ Begin
             Continue;
         End;
 
-        table.AddOutgoingRelation(
-          resultset.GetString(2), // inSourceTableName, PKTABLE_NAME
-          resultset.GetString(6), // inTargetTableName, FKTABLE_NAME
+        _settings.AddRelation(
           resultset.GetString(11), // inRelationName, FK_NAME
+          resultset.GetString(2), // inSourceTableName, PKTABLE_NAME
           sourcefield, // inSourceFieldName
+          resultset.GetString(6), // inTargetTableName, FKTABLE_NAME
           targetfield // inTargetFieldName
         );
 
@@ -1092,9 +1148,8 @@ End;
 
 Procedure TAEORMEntityGenerator.GenerateNames;
 Var
-  tableenum, fieldenum: String;
-  relation, rel2: TAEORMEntityGeneratorRelation;
-  sametbltwice: Boolean;
+  tableenum, fieldenum, relationenum: String;
+  relation: TAEORMEntityGeneratorRelation;
   table: TAEORMEntityGeneratorTable;
   field: TAEORMEntityGeneratorField;
 Begin
@@ -1154,72 +1209,33 @@ Begin
     End;
   End;
 
-  For tableenum In _settings.Tables Do
+  For relationenum In _settings.Relations Do
   Begin
-    table := _settings.Table[tableenum];
+    relation := _settings.Relation[relationenum];
 
-    For relation In table.IncomingRelations Do
+    Log(eglaGeneratingName, '', '', relationenum);
+
+    If relation.GeneratedPropertyName.IsEmpty Then
+      relation.GeneratedPropertyName := SanitizePropertyName(_settings.Table[relation.TargetTableName].GeneratedClassName.Substring(1) + 's');
+
+    If relation.GeneratedClassName.IsEmpty Then
+      relation.GeneratedClassName := 'T' + _settings.Table[relation.SourceTableName].GeneratedClassName.Substring(1) + '_' + _settings.Table[relation.TargetTableName].GeneratedClassName.Substring(1);
+
+    relation.GeneratedVariableName := _settings.GlobalVariablePrefix + relation.GeneratedPropertyName;
+
+    If relation.SingleEntityGeneratedPropertyName.IsEmpty Then
+      relation.SingleEntityGeneratedPropertyName := SanitizePropertyName(_settings.Table[relation.SourceTableName].GeneratedClassName.Substring(1));
+
+    If relation.SingleEntityGeneratedClassName.IsEmpty Then
+      relation.SingleEntityGeneratedClassName := _settings.Table[relation.SourceTableName].GeneratedClassName;
+
+    If relation.SingleEntityGeneratedVariableName.IsEmpty Then
+      relation.SingleEntityGeneratedVariableName := _settings.GlobalVariablePrefix + relation.SingleEntityGeneratedPropertyName;
+
+    If _settings.LowerCaseVariables Then
     Begin
-      Log(eglaGeneratingName, tableenum, '', relation.RelationName);
-
-      sametbltwice := False;
-
-      For rel2 In table.IncomingRelations Do
-        If (relation <> rel2) And (relation.SourceTableName = rel2.SourceTableName) Then
-        Begin
-          sametbltwice := True;
-
-          Break;
-        End;
-
-      If relation.GeneratedPropertyName.IsEmpty Then
-        If sametbltwice Then
-          relation.GeneratedPropertyName := SanitizePropertyName(relation.RelationName)
-        Else
-          relation.GeneratedPropertyName := SanitizePropertyName(_settings.Table[relation.SourceTableName].GeneratedClassName.Substring(1));
-
-      If relation.GeneratedClassName.IsEmpty Then
-          relation.GeneratedClassName := 'T' + _settings.Table[relation.SourceTableName].GeneratedClassName.Substring(1) + '_' + _settings.Table[relation.TargetTableName].GeneratedClassName.Substring(1);
-
-      If relation.GeneratedVariableName.IsEmpty Then
-      Begin
-        relation.GeneratedVariableName := _settings.GlobalVariablePrefix + relation.GeneratedPropertyName;
-
-        If _settings.LowerCaseVariables Then
-          relation.GeneratedVariableName := relation.GeneratedVariableName.ToLower;
-      End;
-    End;
-
-    For relation In table.OutgoingRelations Do
-    Begin
-      Log(eglaGeneratingName, tableenum, '', relation.RelationName);
-
-      sametbltwice := False;
-
-      For rel2 In _settings.Table[tableenum].OutgoingRelations Do
-        If (relation <> rel2) And (relation.TargetTableName = rel2.TargetTableName) Then
-        Begin
-          sametbltwice := True;
-
-          Break;
-        End;
-
-      If relation.GeneratedPropertyName.IsEmpty Then
-        If sametbltwice Then
-          relation.GeneratedPropertyName := SanitizePropertyName(relation.RelationName)
-        Else
-          relation.GeneratedPropertyName := SanitizePropertyName(_settings.Table[relation.TargetTableName].GeneratedClassName.Substring(1) + 's');
-
-      If relation.GeneratedClassName.IsEmpty Then
-          relation.GeneratedClassName := 'T' + _settings.Table[relation.SourceTableName].GeneratedClassName.Substring(1) + '_' + _settings.Table[relation.TargetTableName].GeneratedClassName.Substring(1);
-
-      If relation.GeneratedVariableName.IsEmpty Then
-      Begin
-        relation.GeneratedVariableName := _settings.GlobalVariablePrefix + relation.GeneratedPropertyName;
-
-        If _settings.LowerCaseVariables Then
-          relation.GeneratedVariableName := relation.GeneratedVariableName.ToLower;
-      End;
+      relation.GeneratedVariableName := relation.GeneratedVariableName.ToLower;
+      relation.SingleEntityGeneratedVariableName := relation.SingleEntityGeneratedVariableName.ToLower;
     End;
   End;
 End;
