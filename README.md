@@ -8,46 +8,60 @@ It comes with a class to generate the Pascal code for your objects and a connect
 
 The ORM system is using [Zeos database access components](https://zeoslib.sourceforge.io/), the Generator (it's settings to be precise) is using [AEFramework](https://github.com/aehimself/AEFramework).
 
+DB discovery usage:
+```
+Var
+  conn: TZConnection;
+  discovery: TAEORMDBDiscovery;
+  settings: TAEORMEntityGeneratorSettings;
+Begin
+  [...]
+
+  settings := TAEORMEntityGeneratorSettings.Create;
+  Try
+    discovery := TAEORMDBDiscovery.Create;
+    Try
+      discovery.SQLConnection := conn;
+      discovery.Settings := settings;
+      
+      // Automatically discover all tables, fields and relations in the database:
+      discovery.DiscoverAll;
+
+      // Discover tables, fields or relations only:
+      // discovery.DiscoverTables; discovery.DiscoverFields; discovery.DiscoverRelations;
+    Finally
+      FreeAndNil(discovery);
+    End;
+
+    [...]
+
+  Finally
+    FreeAndNil(settings);
+  End;
+```
+
 Generator usage:
 ```
 Var
   gen: TAEORMEntityGenerator;
-  conn: TZSQLConnection;
+  settings: TAEORMEntityGeneratorSettings;
 Begin
   [...]
 
-  gen := TAEORMEntityGenerator.Create;
+  settings := TAEORMEntityGeneratorSettings.Create;
   Try
-    gen.Settings.LowerCaseVariables := True;
-    gen.Settings.GlobalVariablePrefix := '_';
-    gen.SQLConnection := conn;
-    gen.Connect;
+    // Load by settings.AsString or use TAEORMDBDiscovery to have some values
+    // You also can manually define the structure with
+    // settings.Table['MyTable'].Field['MyField'].PropertyType := oftInteger;
 
-//    Automatically discover all tables, fields and relations in the database:
-//    gen.DiscoverAll;
-
-//    Discover only tables:
-//    gen.DiscoverTables;
-
-//    Add tables, fields, relations, change their generated names:
-//    gen.Settings.Table['mytable1'].GeneratedClassName := 'TMyTable1';
-//    gen.Settings.Table['mytable1'].Field['MyField'].Required := False;
-
-//    Discover all fields and relations for tables in the settings:
-//    gen.DiscoverFields;
-//    gen.DiscoverRelations;
-
-    // Load back previously saved settings
-    gen.Settings.AsString := TFile.ReadAllText('.\gensettings.json');
-
-    TFile.WriteAllText('.\AE.ORM.CustomEntities.pas', gen.Generate('AE.ORM.CustomEntities'));
-
-    // Save discovered things, names and properties
-    TFile.WriteAllText('.\gensettings.json', gen.Settings.AsString);
-
-    gen.Disconnect;
+    gen := TAEORMEntityGenerator.Create;
+    Try
+      TFile.WriteAllText('.\AE.ORM.CustomEntities.pas', gen.Generate('AE.ORM.CustomEntities'));
+    Finally
+      FreeAndNil(gen);
+    End;
   Finally
-    FreeAndNil(gen);
+    FreeAndNil(settings);
   End;
 ```
 
@@ -114,13 +128,15 @@ TAEORMEntity is the skeleton of a single ORM object, a record in the database.
 ## Generator folder
 This folder contains the classes needed to generate the ORM objects based on your input or discovery.
 
+#### AE.ORM.Generator.Discovery.pas
+TAEORMEntityGenerator is responsible for crawling through a database, discovering and importing tables, their fields and relations to the TAEORMEntityGeneratorSettings structure. If the settings are filled manually or loaded via the .AsString property it's not always needed.
+
 #### Generator\AE.ORM.Generator.Entities.pas
 TAEORMEntityBase, TAEORMEntityGeneratorField, TAEORMEntityGeneratorRelation and TAEORMEntityGeneratorTable are all used by the settings of the generator class. They contain the information from which the source
 file will be generated, take care of JSON (de)serialization and contain some helper methods to make lookup or data insertation easier.
 
 #### Generator\AE.ORM.Generator.pas
-TAEORMEntityGenerator is the brains of the operation. It's main role is to create the Pascal source for the tables, fields and relations currently in it's settings. As an extra, with a database connection it is
-capable of discovering all these for you.
+TAEORMEntityGenerator is the brains of the operation. It's role is to create the Pascal source for the tables, fields and relations currently in the provided TAEORMEntityGeneratorSettings structure.
 
 #### Generator\AE.ORM.Generator.Settings.pas
 TAEORMEntityGeneratorSettings is the full datastore for the generator object. State can be imported or exported via JSON.
